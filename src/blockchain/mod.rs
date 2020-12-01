@@ -1,3 +1,2 @@
-pub mod proto;
 pub mod parser;
-pub mod utils;
+pub mod proto;

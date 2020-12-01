@@ -1,40 +1,42 @@
-use std::io::{self, Read, Error, ErrorKind};
 use std::convert::From;
 use std::fmt;
+use std::io::{self, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
-use blockchain::proto::ToRaw;
-use blockchain::utils::le;
-
+use crate::blockchain::proto::ToRaw;
 
 /// Variable length integer
 /// Also known as CompactSize
 #[derive(Debug, Clone)]
 pub struct VarUint {
-    pub value: u64,     // Represents bytes as uint value
-    buf: Vec<u8>        // Raw bytes used for serialization (uint8 .. uint64 possible). (little endian)
+    pub value: u64, // Represents bytes as uint value
+    buf: Vec<u8>,   // Raw bytes used for serialization (uint8 .. uint64 possible). (little endian)
 }
 
 impl VarUint {
+    #[inline]
     fn new(value: u64, buf: Vec<u8>) -> VarUint {
-        VarUint { value: value as u64, buf: buf }
+        VarUint {
+            value: value as u64,
+            buf,
+        }
     }
 
     pub fn read_from<R: Read + ?Sized>(reader: &mut R) -> io::Result<VarUint> {
-        let first = try!(reader.read_u8()); // read first length byte
+        let first = reader.read_u8()?; // read first length byte
         let vint = match first {
-            0x00...0xfc => VarUint::from(first),
-            0xfd => VarUint::from(try!(reader.read_u16::<LittleEndian>())),
-            0xfe => VarUint::from(try!(reader.read_u32::<LittleEndian>())),
-            0xff => VarUint::from(try!(reader.read_u64::<LittleEndian>())),
-            _ => return Err(Error::new(ErrorKind::InvalidData, "Invalid VarUint value")),
+            0x00..=0xfc => VarUint::from(first),
+            0xfd => VarUint::from(reader.read_u16::<LittleEndian>()?),
+            0xfe => VarUint::from(reader.read_u32::<LittleEndian>()?),
+            0xff => VarUint::from(reader.read_u64::<LittleEndian>()?),
         };
         Ok(vint)
     }
 }
 
 impl From<u8> for VarUint {
+    #[inline]
     fn from(value: u8) -> Self {
         VarUint::new(value as u64, vec![value])
     }
@@ -44,7 +46,7 @@ impl From<u16> for VarUint {
     fn from(value: u16) -> Self {
         let mut buf: Vec<u8> = Vec::with_capacity(3);
         buf.push(0xfd);
-        buf.extend_from_slice(&le::u16_to_array(value));
+        buf.extend_from_slice(&value.to_le_bytes());
         VarUint::new(value as u64, buf)
     }
 }
@@ -53,7 +55,7 @@ impl From<u32> for VarUint {
     fn from(value: u32) -> Self {
         let mut buf: Vec<u8> = Vec::with_capacity(5);
         buf.push(0xfe);
-        buf.extend_from_slice(&le::u32_to_array(value));
+        buf.extend_from_slice(&value.to_le_bytes());
         VarUint::new(value as u64, buf)
     }
 }
@@ -62,12 +64,13 @@ impl From<u64> for VarUint {
     fn from(value: u64) -> Self {
         let mut buf: Vec<u8> = Vec::with_capacity(9);
         buf.push(0xff);
-        buf.extend_from_slice(&le::u64_to_array(value));
+        buf.extend_from_slice(&value.to_le_bytes());
         VarUint::new(value as u64, buf)
     }
 }
 
 impl ToRaw for VarUint {
+    #[inline]
     fn to_bytes(&self) -> Vec<u8> {
         self.buf.clone()
     }
@@ -81,9 +84,9 @@ impl fmt::Display for VarUint {
 
 #[cfg(test)]
 mod tests {
+    use crate::blockchain::proto::varuint::VarUint;
+    use crate::blockchain::proto::ToRaw;
     use std::io;
-    use blockchain::proto::ToRaw;
-    use blockchain::proto::varuint::VarUint;
 
     #[test]
     fn test_varuint_u8() {
@@ -130,7 +133,10 @@ mod tests {
         assert_eq!(9000000000000000000, test.value);
         assert_eq!(v, test.value as u64);
         assert_eq!(9, test.to_bytes().len());
-        assert_eq!(vec![0xff, 0x00, 0x00, 0x84, 0xe2, 0x50, 0x6c, 0xe6, 0x7c], test.to_bytes());
+        assert_eq!(
+            vec![0xff, 0x00, 0x00, 0x84, 0xe2, 0x50, 0x6c, 0xe6, 0x7c],
+            test.to_bytes()
+        );
     }
 
     #[test]

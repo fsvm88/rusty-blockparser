@@ -1,9 +1,11 @@
 target
 .cargo
-Cargo.lock
 chain.json
 bench.txt
-test.sh
 csvdump
 .project
 .idea
+
+test.sh
+debug.sh
+dump/
